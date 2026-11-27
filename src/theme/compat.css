@@ -52,6 +52,7 @@
 .no-flex-gap .prefs-crossfade > :not(:last-child),
 .no-flex-gap .sheet-buttons > :not(:last-child),
 .no-flex-gap .update-progress > :not(:last-child) { margin-right: 10px; }
+.no-flex-gap .duplicates-row > :not(:last-child) { margin-right: 8px; }
 .no-flex-gap .device-rescue > :not(:last-child),
 .no-flex-gap .info-header > :not(:last-child),
 .no-flex-gap .purchase-row > :not(:last-child),

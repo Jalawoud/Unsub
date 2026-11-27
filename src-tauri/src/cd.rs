@@ -449,7 +449,7 @@ pub fn cd_import(app: AppHandle, state: State<'_, DevicesState>, disc_id: String
                     cd.imported.retain(|t| t.number != track.number);
                     cd.imported.push(ImportedTrack { number: track.number, accuraterip: track.accuraterip.into() });
                 });
-                library::add_paths(&app, vec![track.path]);
+                library::add_paths(&app, vec![track.path], library::Duplicates::Add);
                 changed(&app);
             }
             let _ = app.emit(RIP_EVENT, Some(status));

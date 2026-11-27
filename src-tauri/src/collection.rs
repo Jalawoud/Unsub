@@ -518,7 +518,7 @@ pub fn collection_locate_folder(app: AppHandle) {
     let handle = app.clone();
     app.dialog().file().set_title("Locate Your Music").pick_folder(move |folder| {
         if let Some(path) = folder.and_then(|f| f.into_path().ok()) {
-            library::add_paths(&handle, vec![path]);
+            library::add_paths(&handle, vec![path], library::Duplicates::Hold);
         }
     });
 }
@@ -642,7 +642,7 @@ pub fn collection_import_owned(
     };
     let count = paths.len();
     if count > 0 {
-        library::add_paths(&app, paths);
+        library::add_paths(&app, paths, library::Duplicates::Add);
     }
     Ok(count)
 }

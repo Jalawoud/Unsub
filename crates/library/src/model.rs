@@ -218,6 +218,33 @@ pub struct ScanSummary {
     pub updated: u64,
     pub unchanged: u64,
     pub failed: Vec<(String, String)>,
+    /// New files left out because the library already has the same song; see `add_paths_checked`.
+    pub held: Vec<HeldDuplicate>,
+}
+
+/// A file an import left out because it looks like a song the library already has: the same
+/// title, artist and album, and a length within `ADD_DUPLICATE_TOLERANCE_MS`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeldDuplicate {
+    pub path: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub duration_ms: u64,
+    pub codec: String,
+    pub bitrate_kbps: Option<u32>,
+    /// The song it matches, which is already in the library or earlier in the same import.
+    pub existing: DuplicateOf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateOf {
+    pub path: String,
+    pub duration_ms: u64,
+    pub codec: String,
+    pub bitrate_kbps: Option<u32>,
 }
 
 /// A song from another library (e.g. Apple Music) to look for in ours.

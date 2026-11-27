@@ -142,7 +142,7 @@ pub async fn purchases_accept(app: AppHandle, candidate_id: i64) -> CommandResul
     blocking(move || {
         let state = app.state::<PurchasesState>();
         let purchase = lock(&state.inbox).accept(candidate_id, &mut |_, _| {}).map_err(to_error)?;
-        library::add_paths(&app, purchase.files.clone());
+        library::add_paths(&app, purchase.files.clone(), library::Duplicates::Add);
         let _ = app.emit(CHANGED_EVENT, ());
         Ok(purchase)
     })

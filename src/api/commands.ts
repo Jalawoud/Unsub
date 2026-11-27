@@ -64,6 +64,7 @@ import type {
   RescueOptions,
   RescuePreview,
   RescueScope,
+  HeldDuplicate,
   ScanProgress,
   SharedLibrary,
   SharingSettings,
@@ -117,6 +118,8 @@ export const libraryLyrics = (trackId: number) => invoke<Lyrics | null>("library
 export const libraryChapters = (trackId: number) => invoke<Chapter[]>("library_chapters", { trackId });
 export const libraryStats = (query: TrackQuery) => invoke<LibraryStats>("library_stats", { query });
 export const libraryAddPaths = (paths: string[]) => invoke<void>("library_add_paths", { paths });
+/** Adds files an import held back as duplicates, without checking them again. */
+export const libraryAddAnyway = (paths: string[]) => invoke<void>("library_add_anyway", { paths });
 export const librarySetRating = (trackId: number, rating: number) =>
   invoke<void>("library_set_rating", { trackId, rating });
 
@@ -268,6 +271,8 @@ export const onScanProgress = (handler: (progress: ScanProgress) => void): Promi
   listen<ScanProgress>("library://scan-progress", (e) => handler(e.payload));
 export const onLibraryChanged = (handler: () => void): Promise<UnlistenFn> =>
   listen("library://changed", () => handler());
+export const onDuplicatesHeld = (handler: (held: HeldDuplicate[]) => void): Promise<UnlistenFn> =>
+  listen<HeldDuplicate[]>("library://duplicates-held", (e) => handler(e.payload));
 
 /** Reads the Music app, or the exported library at `xml`, and says what importing it would find. */
 export const importMusicInspect = (xml: string | null) => invoke<ImportPreview>("import_music_inspect", { xml });

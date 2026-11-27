@@ -185,6 +185,7 @@ pub fn run() {
             library::library_move_in_playlist,
             library::library_set_smart_rules,
             library::library_add_paths,
+            library::library_add_anyway,
             devices::devices_list,
             devices::device_tracks,
             devices::device_stats,

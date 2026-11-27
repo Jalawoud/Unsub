@@ -36,6 +36,7 @@ pub use cleanup::{
 pub use cloud::{ensure_local, evict, is_dataless};
 pub use details::{Blocked, DetailsHost, DetailsProgress, DetailsSummary, UnreadTotals};
 pub use edit::{EditReport, TrackEdits};
+pub use duplicates::ADD_DUPLICATE_TOLERANCE_MS;
 pub use error::{Error, Result};
 pub use library::Library;
 pub use loudness::{
@@ -43,7 +44,8 @@ pub use loudness::{
 };
 pub use lyrics::{Lyrics, LyricsSource};
 pub use model::{
-    AddSummary, AlbumSummary, ArtistSummary, Artwork, ComposerSummary, CopyIn, ExternalStats,
+    AddSummary, AlbumSummary, ArtistSummary, Artwork, ComposerSummary, CopyIn, DuplicateOf,
+    ExternalStats, HeldDuplicate,
     ExternalTrack, GenreSummary, LibraryStats, MatchOutcome, MatchQuality, MediaKind, Mix,
     Playlist, PlaylistKind, ScanProgress, ScanSummary, SortKey, Track, TrackMatch, TrackOverrides,
     TrackQuery,

@@ -8,10 +8,11 @@ use rusqlite::{OptionalExtension, params};
 use walkdir::{DirEntry, WalkDir};
 
 use crate::cloud::placeholder_meta;
+use crate::duplicates::DuplicateIndex;
 use crate::error::{Error, Result};
 use crate::library::Library;
 use crate::model::{
-    AddSummary, CopyIn, MediaKind, RADIO, ScanProgress, ScanSummary, Track, TrackOverrides,
+    AddSummary, CopyIn, HeldDuplicate, MediaKind, RADIO, ScanProgress, ScanSummary, Track, TrackOverrides,
 };
 use crate::organize::MediaSettings;
 use crate::store::{WriteMode, write_tracks};
@@ -57,6 +58,27 @@ impl Library {
     pub fn add_paths(
         &mut self,
         paths: &[PathBuf],
+        progress: impl FnMut(ScanProgress),
+    ) -> Result<ScanSummary> {
+        self.scan_paths(paths, false, progress)
+    }
+
+    /// `add_paths` that leaves out each new file repeating a song the library already has (or one
+    /// added earlier in this call): the same title, primary artist and album, and a length within
+    /// `ADD_DUPLICATE_TOLERANCE_MS`. Those are listed in `held`, untouched, for the user to add
+    /// with `add_paths` or skip. Files already in the library are refreshed as usual.
+    pub fn add_paths_checked(
+        &mut self,
+        paths: &[PathBuf],
+        progress: impl FnMut(ScanProgress),
+    ) -> Result<ScanSummary> {
+        self.scan_paths(paths, true, progress)
+    }
+
+    fn scan_paths(
+        &mut self,
+        paths: &[PathBuf],
+        hold_duplicates: bool,
         mut progress: impl FnMut(ScanProgress),
     ) -> Result<ScanSummary> {
         let now = unix_secs(SystemTime::now());
@@ -64,6 +86,11 @@ impl Library {
         let mut seen = HashSet::new();
         let mut batch = Vec::with_capacity(BATCH_SIZE);
         let media = self.media_settings()?;
+        let mut known = if hold_duplicates {
+            Some(DuplicateIndex::of(self)?)
+        } else {
+            None
+        };
 
         for root in paths {
             // The folder the user chose, which a placeholder's artist and album are read relative to.
@@ -107,10 +134,28 @@ impl Library {
                 summary.scanned += 1;
                 match self.examine(&canonical, scanned_root.as_deref(), now) {
                     Ok(Outcome::Unchanged) => summary.unchanged += 1,
+                    Ok(Outcome::Added(track))
+                        if let Some(existing) =
+                            known.as_ref().and_then(|known| known.find(&track)) =>
+                    {
+                        summary.held.push(HeldDuplicate {
+                            existing: existing.clone(),
+                            path: track.path,
+                            title: track.title,
+                            artist: track.artist,
+                            album: track.album,
+                            duration_ms: track.duration_ms,
+                            codec: track.codec,
+                            bitrate_kbps: track.bitrate_kbps,
+                        });
+                    }
                     Ok(Outcome::Added(mut track)) => {
                         match self.place_new_file(&mut track, &media) {
                             Ok(()) => {
                                 summary.added += 1;
+                                if let Some(known) = known.as_mut() {
+                                    known.insert(&track);
+                                }
                                 batch.push(track);
                             }
                             Err(err) => summary

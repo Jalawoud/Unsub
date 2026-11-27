@@ -1,4 +1,5 @@
-use unsub_library::{Library, Track};
+use tempfile::TempDir;
+use unsub_library::{Library, Track, TrackQuery};
 
 use crate::common::{copy_fixtures, fixtures_dir, library_of, scan, track};
 
@@ -132,4 +133,101 @@ fn a_scanned_copy_of_a_file_is_found_in_both_modes() {
         .collect();
 
     assert_eq!(both, [2, 2]);
+}
+
+/// A folder holding only the halo.mp3 fixture, under `name`.
+fn folder_with_halo(name: &str) -> TempDir {
+    let dir = TempDir::new().unwrap();
+    std::fs::copy(fixtures_dir().join("halo.mp3"), dir.path().join(name)).unwrap();
+    dir
+}
+
+/// What the library knows halo.mp3 as, read the way an import reads it.
+fn halo() -> Track {
+    let dir = folder_with_halo("halo.mp3");
+    let mut library = Library::open_in_memory().unwrap();
+    scan(&mut library, dir.path());
+    library.tracks(&TrackQuery::default()).unwrap().remove(0)
+}
+
+fn library_holding_halo(offset_ms: i64, album: Option<&str>) -> Library {
+    let halo = halo();
+    let duration = (halo.duration_ms as i64 + offset_ms) as u64;
+    library_of(&[row(1, &halo.title, &halo.artist, album.unwrap_or(&halo.album), duration)])
+}
+
+#[test]
+fn a_checked_add_holds_back_a_song_the_library_already_has() {
+    let mut library = library_holding_halo(0, None);
+    let dir = folder_with_halo("copy of halo.mp3");
+
+    let summary = library.add_paths_checked(&[dir.path().to_path_buf()], |_| {}).unwrap();
+
+    assert_eq!(summary.added, 0);
+    assert_eq!(summary.held.len(), 1);
+    assert!(summary.held[0].path.ends_with("copy of halo.mp3"));
+    assert_eq!(summary.held[0].existing.path, "/music/1.mp3");
+    assert_eq!(library.tracks(&TrackQuery::default()).unwrap().len(), 1);
+}
+
+#[test]
+fn lengths_up_to_fifteen_seconds_apart_are_the_same_song() {
+    for (offset, held) in [(0, true), (15_000, true), (15_001, false), (60_000, false)] {
+        let mut library = library_holding_halo(offset, None);
+        let dir = folder_with_halo("halo.mp3");
+
+        let summary = library.add_paths_checked(&[dir.path().to_path_buf()], |_| {}).unwrap();
+
+        assert_eq!(summary.held.len() == 1, held, "{offset} ms apart");
+        assert_eq!(summary.added == 1, !held, "{offset} ms apart");
+    }
+}
+
+#[test]
+fn the_same_song_on_another_album_is_not_held() {
+    let mut library = library_holding_halo(0, Some("Greatest Hits"));
+    let dir = folder_with_halo("halo.mp3");
+
+    let summary = library.add_paths_checked(&[dir.path().to_path_buf()], |_| {}).unwrap();
+
+    assert!(summary.held.is_empty());
+    assert_eq!(summary.added, 1);
+}
+
+#[test]
+fn two_copies_in_one_import_keep_the_first_and_hold_the_second() {
+    let mut library = Library::open_in_memory().unwrap();
+    let dir = folder_with_halo("a.mp3");
+    std::fs::copy(dir.path().join("a.mp3"), dir.path().join("b.mp3")).unwrap();
+
+    let summary = library.add_paths_checked(&[dir.path().to_path_buf()], |_| {}).unwrap();
+
+    assert_eq!(summary.added, 1);
+    assert_eq!(summary.held.len(), 1);
+    let kept = &library.tracks(&TrackQuery::default()).unwrap()[0].path;
+    assert_eq!(&summary.held[0].existing.path, kept);
+    assert_ne!(&summary.held[0].path, kept);
+}
+
+#[test]
+fn rescanning_songs_already_in_the_library_holds_nothing() {
+    let dir = folder_with_halo("halo.mp3");
+    let mut library = Library::open_in_memory().unwrap();
+    scan(&mut library, dir.path());
+
+    let summary = library.add_paths_checked(&[dir.path().to_path_buf()], |_| {}).unwrap();
+
+    assert!(summary.held.is_empty());
+    assert_eq!(summary.unchanged, 1);
+}
+
+#[test]
+fn a_plain_add_still_adds_duplicates() {
+    let mut library = library_holding_halo(0, None);
+    let dir = folder_with_halo("halo.mp3");
+
+    let summary = library.add_paths(&[dir.path().to_path_buf()], |_| {}).unwrap();
+
+    assert!(summary.held.is_empty());
+    assert_eq!(summary.added, 1);
 }

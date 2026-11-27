@@ -61,6 +61,7 @@ import { deletePlaylist } from "./sidebar/sidebarMenu";
 import { Sidebar } from "./sidebar/Sidebar";
 import { VISUALIZER_STYLES } from "./visualizer/styles";
 import { UpdateSheet } from "./updates/UpdateSheet";
+import { DuplicatesSheet } from "./import/DuplicatesSheet";
 import { Welcome, showWelcomeTips } from "./welcome/Welcome";
 import { newCondition } from "./smart/fields";
 import { SmartPlaylistEditor } from "./smart/SmartPlaylistEditor";
@@ -389,6 +390,7 @@ export default function App() {
       {mini && <MiniPlayer />}
       {/* One place in both modes, so an update offer survives the switch; it brings the full window back itself. */}
       <UpdateSheet />
+      <DuplicatesSheet />
     </div>
   );
 }

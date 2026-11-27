@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use unsub_library::{
     AlbumSummary, ArtistSummary, Chapter, CleanUpChange, CleanUpRules, ComposerSummary, EditReport, GenreSummary, Library, LibraryStats,
-    Lyrics, MediaSettings, Mix, OrganizeReport, Playlist, PlaylistKind, ScanSummary, SmartRules, Track, TrackEdits, TrackQuery,
+    Lyrics, MediaSettings, Mix, OrganizeReport, Playlist, PlaylistKind, ScanProgress, ScanSummary, SmartRules, Track, TrackEdits, TrackQuery,
 };
 
 use crate::error::{CommandError, CommandResult};
@@ -24,6 +24,8 @@ pub const ORGANIZE_EVENT: &str = "library://organize";
 pub const CLEAN_UP_EVENT: &str = "library://clean-up";
 /// How a clean-up ended, for the notice.
 pub const CLEAN_UP_DONE_EVENT: &str = "library://clean-up-done";
+/// Files an import left out because the library already has those songs, for the user to decide on.
+pub const DUPLICATES_HELD_EVENT: &str = "library://duplicates-held";
 
 /// SQLite in WAL mode lets each job keep its own connection, so a long import or a slow
 /// artwork read never blocks the song list.
@@ -288,9 +290,16 @@ pub fn library_set_smart_rules(state: State<'_, LibraryState>, id: i64, rules: S
     Ok(state.queries().set_smart_rules(id, &rules)?)
 }
 
+/// Adds what the user chose, holding back songs the library already has for them to decide on.
 #[tauri::command]
 pub fn library_add_paths(app: AppHandle, paths: Vec<PathBuf>) {
-    add_paths(&app, paths);
+    add_paths(&app, paths, Duplicates::Hold);
+}
+
+/// Adds files an import held back as duplicates, now that the user said to add them anyway.
+#[tauri::command]
+pub fn library_add_anyway(app: AppHandle, paths: Vec<PathBuf>) {
+    add_paths(&app, paths, Duplicates::Add);
 }
 
 #[derive(Deserialize)]
@@ -512,21 +521,40 @@ fn scan_notice(result: &Result<ScanSummary, impl std::fmt::Display>) -> Option<S
     }
 }
 
+/// What an import does with a new file that repeats a song already in the library.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Duplicates {
+    /// Leave it out and ask the user, for music they chose to add.
+    Hold,
+    /// Add it, for a CD being ripped or files the user already said yes to.
+    Add,
+}
+
 /// Imports on a background thread with its own connection, reporting progress to the LCD.
-pub fn add_paths(app: &AppHandle, paths: Vec<PathBuf>) {
+pub fn add_paths(app: &AppHandle, paths: Vec<PathBuf>, duplicates: Duplicates) {
     let state = app.state::<LibraryState>();
     let (db_path, scan_lock) = (state.db_path.clone(), Arc::clone(&state.scan_lock));
     let job = Job::new(Kind::Scan, SCAN_PROGRESS_EVENT).open_ended().changed(CHANGED_EVENT);
-    let _ = jobs::start(app, job, move |_, ctx| {
+    let _ = jobs::start(app, job, move |app, ctx| {
         let _turn = scan_lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let result = Library::open(&db_path)
-            .and_then(|mut library| library.add_paths(&paths, |progress| ctx.progress(progress.scanned, None, (), progress)));
+        let result = Library::open(&db_path).and_then(|mut library| {
+            let progress = |progress: ScanProgress| ctx.progress(progress.scanned, None, (), progress);
+            match duplicates {
+                Duplicates::Hold => library.add_paths_checked(&paths, progress),
+                Duplicates::Add => library.add_paths(&paths, progress),
+            }
+        });
         match &result {
             Ok(summary) if !summary.failed.is_empty() => {
                 eprintln!("[library] {} files could not be read: {:?}", summary.failed.len(), summary.failed)
             }
             Ok(_) => {}
             Err(error) => eprintln!("[library] import failed: {error}"),
+        }
+        if let Ok(summary) = &result
+            && !summary.held.is_empty()
+        {
+            let _ = app.emit(DUPLICATES_HELD_EVENT, &summary.held);
         }
         if let Some(message) = scan_notice(&result) {
             ctx.notice(message);

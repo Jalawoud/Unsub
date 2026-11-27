@@ -281,6 +281,26 @@ export interface ScanProgress {
   currentPath: string;
 }
 
+/** The library's copy of a song that an import held back a file of. */
+export interface DuplicateOf {
+  path: string;
+  durationMs: number;
+  codec: string;
+  bitrateKbps: number | null;
+}
+
+/** A file an import left out because the library already has that song. */
+export interface HeldDuplicate {
+  path: string;
+  title: string;
+  artist: string;
+  album: string;
+  durationMs: number;
+  codec: string;
+  bitrateKbps: number | null;
+  existing: DuplicateOf;
+}
+
 export type PlaybackState = "stopped" | "playing" | "paused";
 
 export interface PlaybackStatus {

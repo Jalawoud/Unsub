@@ -1,8 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::error::Result;
 use crate::library::Library;
-use crate::model::RADIO;
+use crate::model::{DuplicateOf, RADIO, Track};
 use crate::normalize::{artist_key, title_key};
 
 /// Within this many milliseconds of each other, two lengths are the same recording.
@@ -85,4 +85,69 @@ fn exact_groups(bucket: Vec<Row>) -> Vec<Vec<Row>> {
         group.sort_by_key(|row| row.id);
     }
     groups
+}
+
+/// When adding music, two lengths within this many milliseconds are the same song. Looser than
+/// "Show Exact Duplicates" because a rip, a download and a store copy of one song often differ by
+/// a few seconds of silence or a longer fade.
+pub const ADD_DUPLICATE_TOLERANCE_MS: u64 = 15_000;
+
+type SongKey = (String, String, Option<String>);
+
+/// The library's songs by title, primary artist and album, for an import to check new files
+/// against. Songs the import adds are put in too, so one folder holding two copies is caught.
+pub(crate) struct DuplicateIndex {
+    songs: HashMap<SongKey, Vec<DuplicateOf>>,
+}
+
+impl DuplicateIndex {
+    pub(crate) fn of(library: &Library) -> Result<Self> {
+        let mut stmt = library.conn.prepare(&format!(
+            "SELECT title, artist, album, path, duration_ms, codec, bitrate_kbps FROM tracks
+                 WHERE kind <> {RADIO}"
+        ))?;
+        let mut rows = stmt.query([])?;
+        let mut index = Self { songs: HashMap::new() };
+        while let Some(row) = rows.next()? {
+            let (title, artist, album): (String, String, String) = (row.get(0)?, row.get(1)?, row.get(2)?);
+            if let Some(key) = song_key(&title, &artist, &album) {
+                index.songs.entry(key).or_default().push(DuplicateOf {
+                    path: row.get(3)?,
+                    duration_ms: row.get(4)?,
+                    codec: row.get(5)?,
+                    bitrate_kbps: row.get(6)?,
+                });
+            }
+        }
+        Ok(index)
+    }
+
+    /// The song already known that `track` repeats, if any; the closest in length when several do.
+    pub(crate) fn find(&self, track: &Track) -> Option<&DuplicateOf> {
+        let key = song_key(&track.title, &track.artist, &track.album)?;
+        self.songs
+            .get(&key)?
+            .iter()
+            .filter(|song| song.path != track.path)
+            .map(|song| (song.duration_ms.abs_diff(track.duration_ms), song))
+            .filter(|(gap, _)| *gap <= ADD_DUPLICATE_TOLERANCE_MS)
+            .min_by_key(|(gap, _)| *gap)
+            .map(|(_, song)| song)
+    }
+
+    pub(crate) fn insert(&mut self, track: &Track) {
+        if let Some(key) = song_key(&track.title, &track.artist, &track.album) {
+            self.songs.entry(key).or_default().push(DuplicateOf {
+                path: track.path.clone(),
+                duration_ms: track.duration_ms,
+                codec: track.codec.clone(),
+                bitrate_kbps: track.bitrate_kbps,
+            });
+        }
+    }
+}
+
+/// Keys as "Show Exact Duplicates" does; without a title and an artist there is nothing to compare.
+fn song_key(title: &str, artist: &str, album: &str) -> Option<SongKey> {
+    Some((title_key(title)?, artist_key(artist)?, title_key(album)))
 }

@@ -265,7 +265,7 @@ pub fn on_event(app: &AppHandle, event: MenuEvent) {
             let paths: Vec<_> = folders.unwrap_or_default().into_iter().filter_map(|f| f.into_path().ok()).collect();
             if !paths.is_empty() {
                 let _ = handle.emit(MUSIC_ADD_ACCEPTED_EVENT, ());
-                library::add_paths(&handle, paths);
+                library::add_paths(&handle, paths, library::Duplicates::Hold);
             }
         });
     } else if id == ADD_MUSIC_FILES {
@@ -274,7 +274,7 @@ pub fn on_event(app: &AppHandle, event: MenuEvent) {
             let paths: Vec<_> = files.unwrap_or_default().into_iter().filter_map(|f| f.into_path().ok()).collect();
             if !paths.is_empty() {
                 let _ = handle.emit(MUSIC_ADD_ACCEPTED_EVENT, ());
-                library::add_paths(&handle, paths);
+                library::add_paths(&handle, paths, library::Duplicates::Hold);
             }
         });
     } else if CONTROL_ACTIONS.iter().any(|(action, _, _)| *action == id) {
