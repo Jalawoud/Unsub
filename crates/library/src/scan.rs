@@ -64,7 +64,7 @@ impl Library {
     }
 
     /// `add_paths` that leaves out each new file repeating a song the library already has (or one
-    /// added earlier in this call): the same title, primary artist and album, and a length within
+    /// added earlier in this call): the same title and primary artist (on any album), and a length within
     /// `ADD_DUPLICATE_TOLERANCE_MS`. Those are listed in `held`, untouched, for the user to add
     /// with `add_paths` or skip. Files already in the library are refreshed as usual.
     pub fn add_paths_checked(

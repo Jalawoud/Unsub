@@ -10,8 +10,8 @@ const quality = (codec: string, kbps: number | null, ms: number) =>
 const fileName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /**
- * Asks about files an import held back because the library already has those songs (same title,
- * artist and album, lengths within 15 seconds). Skipping leaves the files where they are, unadded;
+ * Asks about files an import held back because the library already has those songs (same title and
+ * artist on any album, lengths within 15 seconds). Skipping leaves the files where they are, unadded;
  * adding imports them without checking again.
  */
 export function DuplicatesSheet() {
@@ -50,8 +50,8 @@ export function DuplicatesSheet() {
           {count === 1 ? "This song is" : `${count} songs are`} already in your library.
         </h2>
         <p className="prefs-note">
-          {count === 1 ? "It has" : "Each has"} the same title, artist and album as a song you have, and is within 15
-          seconds of its length. Skipped files stay where they are and aren't added.
+          {count === 1 ? "It has" : "Each has"} the same title and artist as a song you have (on any album), and is within
+          15 seconds of its length. Skipped files stay where they are and aren't added.
         </p>
         <div className="duplicates-list" tabIndex={0}>
           {held.map((file) => (

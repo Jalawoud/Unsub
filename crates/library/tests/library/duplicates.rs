@@ -184,14 +184,14 @@ fn lengths_up_to_fifteen_seconds_apart_are_the_same_song() {
 }
 
 #[test]
-fn the_same_song_on_another_album_is_not_held() {
+fn the_same_song_on_another_album_is_held_too() {
     let mut library = library_holding_halo(0, Some("Greatest Hits"));
     let dir = folder_with_halo("halo.mp3");
 
     let summary = library.add_paths_checked(&[dir.path().to_path_buf()], |_| {}).unwrap();
 
-    assert!(summary.held.is_empty());
-    assert_eq!(summary.added, 1);
+    assert_eq!(summary.held.len(), 1);
+    assert_eq!(summary.added, 0);
 }
 
 #[test]

@@ -92,9 +92,9 @@ fn exact_groups(bucket: Vec<Row>) -> Vec<Vec<Row>> {
 /// a few seconds of silence or a longer fade.
 pub const ADD_DUPLICATE_TOLERANCE_MS: u64 = 15_000;
 
-type SongKey = (String, String, Option<String>);
+type SongKey = (String, String);
 
-/// The library's songs by title, primary artist and album, for an import to check new files
+/// The library's songs by title and primary artist, for an import to check new files
 /// against. Songs the import adds are put in too, so one folder holding two copies is caught.
 pub(crate) struct DuplicateIndex {
     songs: HashMap<SongKey, Vec<DuplicateOf>>,
@@ -103,19 +103,19 @@ pub(crate) struct DuplicateIndex {
 impl DuplicateIndex {
     pub(crate) fn of(library: &Library) -> Result<Self> {
         let mut stmt = library.conn.prepare(&format!(
-            "SELECT title, artist, album, path, duration_ms, codec, bitrate_kbps FROM tracks
+            "SELECT title, artist, path, duration_ms, codec, bitrate_kbps FROM tracks
                  WHERE kind <> {RADIO}"
         ))?;
         let mut rows = stmt.query([])?;
         let mut index = Self { songs: HashMap::new() };
         while let Some(row) = rows.next()? {
-            let (title, artist, album): (String, String, String) = (row.get(0)?, row.get(1)?, row.get(2)?);
-            if let Some(key) = song_key(&title, &artist, &album) {
+            let (title, artist): (String, String) = (row.get(0)?, row.get(1)?);
+            if let Some(key) = song_key(&title, &artist) {
                 index.songs.entry(key).or_default().push(DuplicateOf {
-                    path: row.get(3)?,
-                    duration_ms: row.get(4)?,
-                    codec: row.get(5)?,
-                    bitrate_kbps: row.get(6)?,
+                    path: row.get(2)?,
+                    duration_ms: row.get(3)?,
+                    codec: row.get(4)?,
+                    bitrate_kbps: row.get(5)?,
                 });
             }
         }
@@ -124,7 +124,7 @@ impl DuplicateIndex {
 
     /// The song already known that `track` repeats, if any; the closest in length when several do.
     pub(crate) fn find(&self, track: &Track) -> Option<&DuplicateOf> {
-        let key = song_key(&track.title, &track.artist, &track.album)?;
+        let key = song_key(&track.title, &track.artist)?;
         self.songs
             .get(&key)?
             .iter()
@@ -136,7 +136,7 @@ impl DuplicateIndex {
     }
 
     pub(crate) fn insert(&mut self, track: &Track) {
-        if let Some(key) = song_key(&track.title, &track.artist, &track.album) {
+        if let Some(key) = song_key(&track.title, &track.artist) {
             self.songs.entry(key).or_default().push(DuplicateOf {
                 path: track.path.clone(),
                 duration_ms: track.duration_ms,
@@ -147,7 +147,8 @@ impl DuplicateIndex {
     }
 }
 
-/// Keys as "Show Exact Duplicates" does; without a title and an artist there is nothing to compare.
-fn song_key(title: &str, artist: &str, album: &str) -> Option<SongKey> {
-    Some((title_key(title)?, artist_key(artist)?, title_key(album)))
+/// Keys as "Show Duplicates" does, ignoring the album: a single, a greatest hits and the original
+/// album often hold the same recording. Without a title and an artist there is nothing to compare.
+fn song_key(title: &str, artist: &str) -> Option<SongKey> {
+    Some((title_key(title)?, artist_key(artist)?))
 }

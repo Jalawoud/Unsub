@@ -223,7 +223,7 @@ pub struct ScanSummary {
 }
 
 /// A file an import left out because it looks like a song the library already has: the same
-/// title, artist and album, and a length within `ADD_DUPLICATE_TOLERANCE_MS`.
+/// title and primary artist (on any album), and a length within `ADD_DUPLICATE_TOLERANCE_MS`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HeldDuplicate {
